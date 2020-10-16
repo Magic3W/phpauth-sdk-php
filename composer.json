@@ -1,0 +1,23 @@
+{
+	"name": "magic3w/phpas-sdk-php",
+	"description": "PHP SDK for PHPAuthServer (magic3w/phpauth)",
+	"type": "library",
+	"license": "MIT",
+	"authors": [
+		{
+			"name": "César de la Cal Bretschneider",
+			"email": "cesar@magic3w.com"
+		}
+	],
+
+	"autoload": {
+		"psr-4": {
+			"magic3w\\phpauth\\sdk\\": "./src/"
+		}
+	},
+	
+	"require": {
+		"magic3w/url-reflection": "^0.1.0",
+		"spitfire/request": "^0.1.0"
+	}
+}
