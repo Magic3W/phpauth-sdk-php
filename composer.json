@@ -1,5 +1,5 @@
 {
-	"name": "magic3w/phpas-sdk-php",
+	"name": "magic3w/phpauth-sdk-php",
 	"description": "PHP SDK for PHPAuthServer (magic3w/phpauth)",
 	"type": "library",
 	"license": "MIT",
