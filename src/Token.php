@@ -8,21 +8,15 @@ class Token
 	private $sso;
 	private $token;
 	private $expires;
-	private $redirect;
 	
-	public function __construct($sso, $token, $expires, $redirect) {
+	public function __construct($sso, $token, $expires) {
 		$this->sso = $sso;
 		$this->token = $token;
 		$this->expires = $expires;
-		$this->redirect = $redirect;
 	}
 	
 	public function getId() {
 		return $this->token;
-	}
-	
-	public function getRedirect($successURI, $failureURI = null) {
-		return $this->redirect . '?' . http_build_query(Array('returnurl' => strval($successURI), 'cancelurl' => strval($failureURI)));
 	}
 	
 	public function getTokenInfo() {

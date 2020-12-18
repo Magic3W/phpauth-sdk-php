@@ -17,7 +17,7 @@
 	},
 	
 	"require": {
-		"magic3w/url-reflection": "^0.1.0",
-		"spitfire/request": "^0.1.0"
+		"magic3w/url-reflection": "dev-master",
+		"spitfire/request": "dev-master"
 	}
 }

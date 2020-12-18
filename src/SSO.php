@@ -1,8 +1,6 @@
 <?php namespace magic3w\phpauth\sdk;
 
 use Exception;
-use signature\Hash;
-use signature\Signature;
 Use spitfire\io\request\Request;
 use magic3w\http\url\reflection\URLReflection;
 
@@ -24,42 +22,82 @@ class SSO
 			throw new Exception('App Secret is missing', 1807021658);
 		}
 	}
-	
-	/**
-	 * Creates a new SSO Token. This allows your application to request a single
-	 * user's token and manage it.
-	 */
-	public function createToken($expires = null) {
-		/*
-		 * Fetch the JSON message from the endpoint. This should tell us whether 
-		 * the request was a success.
-		 */
-		$get = Array('appID' => $this->appId, 'appSecret' => $this->appSecret);
-		if ($expires !== null) { $get['expires'] = $expires; }
-		
-		$response = file_get_contents($this->endpoint . '/token/create.json?' . 
-				  http_build_query($get));
-		
-		if (!strstr($http_response_header[0], '200')) { throw new Exception('SSO rejected the token with ' . $http_response_header[0], 1605201109); }
 
-		$data = json_decode($response);
-
-		if (json_last_error() !== JSON_ERROR_NONE) { throw new Exception('SSO sent invalid json response - ' . json_last_error_msg(), 1608012100); }
-		
-		return new Token($this, $data->token, $data->expires, $data->location);
-	}
-	
 	/**
-	 * Instances a token. As opposed to the createToken method, this token cannot
-	 * be authorized afterwards. 
+	 * Generates a URL to direct the user agent to in order to initiate
+	 * the authentication. Please note that the oAuth 2.0 protocol uses the user
+	 * agent for this 'request', therefore the server itself is not performing 
+	 * the request at all.
 	 * 
-	 * @param string $token
-	 * @return Token
+	 * I would like to avoid using the word request for whatever is happening
+	 * at this stage of the connection.
+	 * 
+	 * @param string $host The app ID of the application this client wishes to access data from. This may
+	 *        be null if the application wishes to access the client account on PHPAS.
+	 * 
+	 * @todo Include a target in the access code request so we can request a token for another app
+	 * @return string
 	 */
-	public function makeToken($token) {
-		return new Token($this, $token, null, null);
+	public function makeAccessCodeRedirect($state, $verifier_challenge, $returnto, $host = null) {
+		
+		$request = URLReflection::fromURL(sprintf('%s/auth/oauth', $this->endpoint));
+		$request->get('response_type', 'code');
+		$request->get('client', $this->appId);
+		$request->get('state', $state);
+		$request->get('redirect', $returnto);
+		$request->get('challenge', sprintf('%s:%s', 'sha256', hash('sha256', $verifier_challenge)));
+
+		return strval($request);
 	}
 	
+	/**
+	 * Tokens can be retrieved using three different mechanisms.
+	 * 
+	 * 1. Provide an access code that a user generated. This is used during the oAuth flow
+	 * 2. Provide application specific credentials, yields a client token
+	 * 3. Provide a refresh token.
+	 * 
+	 * This mechanism intends to make it simple for the applications to generate new tokens
+	 * for the first scenario, by providing a code and a verifier to the table.
+	 */
+	public function token($code, $verifier) {
+		$request = URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint));
+		$request->post('code', $code);
+		$request->post('type', 'code');
+		$request->post('client', $this->sso->getAppId());
+		$request->post('secret', $this->sso->getSecret());
+		$request->post('verifier', $verifier);
+		$response = $request->send()->expect(200)->json();
+		
+		return [
+			'access'  => new Token($this, $response->tokens->access->token, $response->tokens->access->expires),
+			'refresh' => new RefreshToken($this, $response->tokens->refresh->token, $response->tokens->refresh->expires)
+		];
+	}
+	
+	/**
+	 * Returns an access token that allows the application to access it's own credentials
+	 * on the server.
+	 * 
+	 * return Token
+	 */
+	public function credentials($host = null) {
+		
+		$request = URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint));
+		$request->post('type', 'client_credentials');
+		$request->post('client', $this->sso->getAppId());
+		$request->post('secret', $this->sso->getSecret());
+		$response = $request->send()->expect(200)->json();
+		
+		return new Token($this, $response->tokens->access->token, $response->tokens->access->expires);
+	}
+	
+	/**
+	 * Since the server no longer acts as a hub for user information, this endpoint is deprecated and 
+	 * should no longer be used.
+	 * 
+	 * @deprecated since version 0.1
+	 */
 	public function getUser($username, Token$token = null) {
 		
 		if (!$username) { throw new Exception('Valid user id needed'); }
@@ -73,33 +111,14 @@ class SSO
 		 * Fetch the JSON message from the endpoint. This should tell us whether 
 		 * the request was a success.
 		 */
-		$resp = $request->send();
-		$data = json_decode($resp)->payload;
+		$data = $request->send()->expect(200)->json();
 		
 		return new User($data->id, $data->username, $data->aliases, $data->groups, $data->verified, $data->registered_unix, $data->attributes, $data->avatar);
 	}
 	
-	public function getEmail($id) {
-		
-		$request = new Request(
-			$this->endpoint . '/email/received/' . $id . '.json',
-			Array('signature' => (string)$this->makeSignature())
-		);
-		
-		/*
-		 * Fetch the JSON message from the endpoint. This should tell us whether 
-		 * the request was a success.
-		 */
-		$resp = $request->send();
-		echo $id;
-		die($resp);
-		$data = json_decode($resp)->payload;
-		
-		return $data;
-	}
-	
 	/**
 	 * 
+	 * @deprecated
 	 * @param string $signature
 	 * @param string $token
 	 * @param string $context
@@ -117,7 +136,7 @@ class SSO
 		
 		$response = $request->send();
 		
-		$json = json_decode($response);
+		$json = $response->expect(200)->json();
 		$src  = new App($json->local->id, $this->appSecret, $json->local->name);
 		
 		if (isset($json->remote)) {
@@ -152,8 +171,11 @@ class SSO
 			Array('appId' => $this->appId, 'appSecret' => $this->appSecret)
 		);
 		
-		$response = $request->send(Array('body' => $body, 'subject' => $subject));
-		$data = json_decode($response)->payload;
+		$request->post('body', $body);
+		$request->post('subject', $subject);
+
+		$response = $request->send();
+		$data = ($response)->expect(200)->json()->payload;
 		
 		return $data;
 	}
@@ -166,57 +188,80 @@ class SSO
 		return $this->appId;
 	}
 	
-	public function makeSignature($target = null, $contexts = []) {
-		$signature = new Signature(Hash::ALGO_DEFAULT, $this->appId, $this->appSecret, $target, $contexts);
-		return $signature;
+	/**
+	 * Returns the secret the system is using to communicate with the server. This can be
+	 * used by refresh tokens to renew their lease.
+	 * 
+	 * @return string
+	 */
+	public function getSecret() {
+		return $this->appSecret;
 	}
 	
 	public function getAppList() {
 		$url      = $this->endpoint . '/appdrawer/index.json';
 		$request  = new Request($url, ['signature' => (string)$this->makeSignature(), 'all' => 'yes']);
-		
-		$response = $request->send();
-		$data     = JSON::decode($response);
-		
+		$data     = $request->send()->expect(200)->json();
 		return $data;
 	}
 	
+	/**
+	 * 
+	 * @deprecated since version 0.1-dev
+	 * @return type
+	 */
 	public function getAppDrawer() {
 		$url = $this->endpoint . '/appdrawer/index.json';
 		$request  = new Request($url, []);
 		
-		$response = $request->send();
-		$data     = JSON::decode($response);
+		$response = $request->send()->expect(200)->json();
 		
-		return $data;
+		return $response;
 	}
 	
+	/**
+	 * 
+	 * @deprecated since version 0.1-dev
+	 * @return type
+	 */
 	public function getAppDrawerJS() {
 		return $this->endpoint . '/appdrawer/index.js';
 	}
 	
 	public function getGroupList() {
-		$url  = $this->endpoint . '/group/index.json';
-		$resp = file_get_contents($url);
+		$url  = new Request($this->endpoint . '/group/index.json');
+		$resp = $url->send()->expect(200)->json();
 		
-		if (!strstr($http_response_header[0], '200')) { 
-			throw new Exception('SSO rejected the request with ' . $http_response_header[0], 201605201109);
-		}
-		
-		$data = json_decode($resp);
-		return $data->payload;
+		return $resp->payload;
 	}
 	
 	public function getGroup($id) {
-		$url  = $this->endpoint . '/group/detail/' . $id . '.json';
-		$resp = file_get_contents($url);
-		
-		if (!strstr($http_response_header[0], '200')) { 
-			throw new Exception('SSO rejected the request with ' . $http_response_header[0], 201605201109);
-		}
-		
-		$data = json_decode($resp);
-		return $data->payload;
+		$url  = new Request($this->endpoint . '/group/detail/' . $id . '.json');
+		return $url->send()->expect(200)->json()->payload;
+	}
+	
+	/**
+	 * Generate a logout link. The logout flow is best described as follows:
+	 * 
+	 * 1. Client generates a logout link, which contains a return URL to direct the user to on successful logout
+	 * 2. Resource owner is directed to the logout location
+	 * 3. Authentication server terminates the session, and all authenticated tokens that depend on it
+	 * 4. Authentication directs the resource owner to the return URL
+	 * 5. Client destroys the session on their end.
+	 * 
+	 * Alternatively, the client can execute the 5fth point first.
+	 * 
+	 * Asynchronously, the Authentication server will start notifying all applications
+	 * using tokens in the current session to destroy them. 
+	 * 
+	 * Invoking this endpoint is optional, it only ends the session on the authentication
+	 * server, allowing your application to display a "log out" from all 
+	 * 
+	 * @param Token $token
+	 * @param string $returnto
+	 */
+	public function getLogoutLink(Token $token, string $returnto) {
+		return $this->endpoint . '/user/logout?' . http_build_query(['returnto' => $returnto, 'token' => $token->getId()]);
 	}
 	
 }
