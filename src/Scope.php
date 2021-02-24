@@ -1,5 +1,7 @@
 <?php namespace magic3w\phpauth\sdk;
 
+use spitfire\io\request\Request;
+
 /* 
  * The MIT License
  *
@@ -24,7 +26,7 @@
  * THE SOFTWARE.
  */
 
-class Context
+class Scope
 {
 	
 	private $sso;
@@ -82,18 +84,6 @@ class Context
 	
 	public function isDenied() {
 		return ((int)$this->granted) === 1;
-	}
-
-	public function create($name, $description) {
-		$request = new Request(
-			$this->sso->getEndpoint() . '/context/create.json', 
-			['context' => $this->id, 'signature' => (string)$this->sso->makeSignature()]
-		);
-		
-		$request->send(['name' => $name, 'description' => $description]);
-		
-		$this->exists = true;
-		return true;
 	}
 
 }

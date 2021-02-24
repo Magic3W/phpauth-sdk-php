@@ -1,5 +1,6 @@
 <?php namespace magic3w\phpauth\sdk;
 
+use CURLFile;
 use Exception;
 Use spitfire\io\request\Request;
 use magic3w\http\url\reflection\URLReflection;
@@ -38,14 +39,16 @@ class SSO
 	 * @todo Include a target in the access code request so we can request a token for another app
 	 * @return string
 	 */
-	public function makeAccessCodeRedirect($state, $verifier_challenge, $returnto, $host = null) {
+	public function makeAccessCodeRedirect($state, $verifier_challenge, $returnto, $audience = null) {
 		
 		$request = URLReflection::fromURL(sprintf('%s/auth/oauth', $this->endpoint));
 		$request->get('response_type', 'code');
 		$request->get('client', $this->appId);
 		$request->get('state', $state);
+		$audience && $request->get('audience', $audience);
 		$request->get('redirect', $returnto);
-		$request->get('challenge', sprintf('%s:%s', 'sha256', hash('sha256', $verifier_challenge)));
+		$request->get('code_challenge', hash('sha256', $verifier_challenge));
+		$request->get('code_challenge_method', 'S256');
 
 		return strval($request);
 	}
@@ -60,13 +63,14 @@ class SSO
 	 * This mechanism intends to make it simple for the applications to generate new tokens
 	 * for the first scenario, by providing a code and a verifier to the table.
 	 */
-	public function token($code, $verifier) {
+	public function token($code, $verifier, $audience = null) {
 		$request = URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint));
 		$request->post('code', $code);
 		$request->post('type', 'code');
 		$request->post('client', $this->sso->getAppId());
 		$request->post('secret', $this->sso->getSecret());
 		$request->post('verifier', $verifier);
+		$audience && $request->post('audience', $audience);
 		$response = $request->send()->expect(200)->json();
 		
 		return [
@@ -76,17 +80,31 @@ class SSO
 	}
 	
 	/**
+	 * Refreshes an access and refresh token by passing a refresh token to the 
+	 * system as grant.
+	 * 
+	 * The token must be a string, if you held onto the `Token` object you received
+	 * from the API, you can extract the code by calling getToken.
+	 */
+	public function refresh(string $token) 
+	{
+		$token = new RefreshToken($this, $token, null);
+		return $token->renew();
+	}
+	
+	/**
 	 * Returns an access token that allows the application to access it's own credentials
 	 * on the server.
 	 * 
-	 * return Token
+	 * @return Token
 	 */
-	public function credentials($host = null) {
-		
+	public function credentials($audience = null) 
+	{
 		$request = URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint));
 		$request->post('type', 'client_credentials');
 		$request->post('client', $this->sso->getAppId());
 		$request->post('secret', $this->sso->getSecret());
+		$audience && $request->post('audience', $audience);
 		$response = $request->send()->expect(200)->json();
 		
 		return new Token($this, $response->tokens->access->token, $response->tokens->access->expires);
@@ -117,53 +135,8 @@ class SSO
 	}
 	
 	/**
-	 * 
-	 * @deprecated
-	 * @param string $signature
-	 * @param string $token
-	 * @param string $context
-	 * @return AppAuthentication
+	 * @deprecated PHPAS does no longer send email, refer to stat for this.
 	 */
-	public function authApp($signature, $token = null, $context = null) {		
-		if ($token instanceof Token) {
-			$token = $token->getId();
-		}
-		
-		$request = new Request(
-			$this->endpoint . '/auth/app.json',
-			array_filter(Array('token' => $token, 'signature' => (string)$this->makeSignature(), 'remote' => $signature, 'context' => $context))
-		);
-		
-		$response = $request->send();
-		
-		$json = $response->expect(200)->json();
-		$src  = new App($json->local->id, $this->appSecret, $json->local->name);
-		
-		if (isset($json->remote)) {
-			$app = new App($json->remote->id, null, $json->remote->name);
-		}
-		else {
-			$app = null;
-		}
-		
-		if ($json->context) {
-			$contexts = [];
-			foreach ($json->context as $jsctx) {
-				$ctx = new Context($this, $app, $jsctx->id);
-				$ctx->setExists(!$jsctx->undefined);
-				$ctx->setGranted($jsctx->granted);
-				$contexts[$jsctx->id] = $ctx;
-			}
-		}
-		else {
-			$contexts = [];
-		}
-		
-		$res  = new AppAuthentication($this, $src, $app, $contexts, $json->token);
-		
-		return $res;
-	}
-	
 	public function sendEmail($userid, $subject, $body) {
 		
 		$request = new Request(
@@ -198,6 +171,11 @@ class SSO
 		return $this->appSecret;
 	}
 	
+	/**
+	 * 
+	 * @deprecated The new version of PHPAS allows users to create applications (allowing them to have
+	 * as many as they want), which makes the functionality of this method clunky and useless.
+	 */
 	public function getAppList() {
 		$url      = $this->endpoint . '/appdrawer/index.json';
 		$request  = new Request($url, ['signature' => (string)$this->makeSignature(), 'all' => 'yes']);
@@ -238,6 +216,28 @@ class SSO
 	public function getGroup($id) {
 		$url  = new Request($this->endpoint . '/group/detail/' . $id . '.json');
 		return $url->send()->expect(200)->json()->payload;
+	}
+	
+	
+	/**
+	 * This method allows your client to push a custom scope onto the server. This scope
+	 * can then be used by third party applications to request access to parts of the user's
+	 * data that you requested be fenced off.
+	 * 
+	 * @param string $id
+	 * @param string $name
+	 * @param string $description
+	 * @param string $icon
+	 * @return void
+	 */
+	public function putScope($id, $name, $description, $icon = null) : void
+	{
+		$request = new Request(
+			sprintf('%s/scope/create/%s.json', $this->getEndpoint(), $id), 
+			['token' => (string)$this->credentials()->getId()]
+		);
+		
+		$request->send(['name' => $name, 'description' => $description, 'icon' => new CURLFile($icon)]);
 	}
 	
 	/**

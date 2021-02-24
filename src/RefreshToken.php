@@ -23,10 +23,10 @@ class RefreshToken
 		return $this->token;
 	}
 	
-	public function renew() {
-		
+	public function renew() 
+	{	
 		$request = URLReflection::fromURL(sprintf('%s/token/create.json', $this->sso->getEndpoint()));
-		$request->post('type', 'token');
+		$request->post('type', 'refresh_token');
 		$request->post('token', $this->token);
 		$request->post('client', $this->sso->getAppId());
 		$request->post('secret', $this->sso->getSecret());
