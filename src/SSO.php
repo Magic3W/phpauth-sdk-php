@@ -119,30 +119,6 @@ class SSO
 	}
 	
 	/**
-	 * Since the server no longer acts as a hub for user information, this endpoint is deprecated and 
-	 * should no longer be used.
-	 * 
-	 * @deprecated since version 0.1
-	 */
-	public function getUser($username, Token$token = null) {
-		
-		if (!$username) { throw new Exception('Valid user id needed'); }
-		
-		$request = new Request(
-			$this->endpoint . '/user/detail/' . $username . '.json',
-			$token && $token->isAuthenticated()? Array('token' => $token->getTokenInfo()->token, 'signature' => (string)$this->makeSignature()) : Array('signature' => (string)$this->makeSignature())
-		);
-		
-		/*
-		 * Fetch the JSON message from the endpoint. This should tell us whether 
-		 * the request was a success.
-		 */
-		$data = $request->send()->expect(200)->json();
-		
-		return new User($data->id, $data->username, $data->aliases, $data->groups, $data->verified, $data->registered_unix, $data->attributes, $data->avatar);
-	}
-	
-	/**
 	 * @deprecated PHPAS does no longer send email, refer to stat for this.
 	 */
 	public function sendEmail($userid, $subject, $body) {
@@ -177,18 +153,6 @@ class SSO
 	 */
 	public function getSecret() {
 		return $this->appSecret;
-	}
-	
-	/**
-	 * 
-	 * @deprecated The new version of PHPAS allows users to create applications (allowing them to have
-	 * as many as they want), which makes the functionality of this method clunky and useless.
-	 */
-	public function getAppList() {
-		$url      = $this->endpoint . '/appdrawer/index.json';
-		$request  = new Request($url, ['signature' => (string)$this->makeSignature(), 'all' => 'yes']);
-		$data     = $request->send()->expect(200)->json();
-		return $data;
 	}
 	
 	/**
