@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7d11b0dfbe31a4b196528f7f695d700b",
+    "content-hash": "616d4e3bc8469efc26bc77a6d0cf83d3",
     "packages": [
         {
             "name": "lcobucci/jwt",
@@ -85,16 +85,16 @@
         },
         {
             "name": "magic3w/url-reflection",
-            "version": "dev-master",
+            "version": "v0.1.3",
             "source": {
                 "type": "git",
                 "url": "https://phabricator.magic3w.com/source/url-reflection.git",
-                "reference": "341d1ede12d28159101b77c8ae12b544dba15a8c"
+                "reference": "c106e4bde9cf2a565121ba2efc47a12defbc61bb"
             },
             "require-dev": {
+                "phpstan/phpstan": "^0.12.77",
                 "phpunit/phpunit": "^9.3"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -112,18 +112,112 @@
                 }
             ],
             "description": "Allows applications to have a URL parsed and retrieve information about it's components",
-            "time": "2021-02-11T13:17:34+00:00"
+            "time": "2021-04-08T09:01:02+00:00"
         },
         {
-            "name": "spitfire/request",
+            "name": "phpstan/phpstan",
+            "version": "0.12.85",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/phpstan/phpstan.git",
+                "reference": "20e6333c0067875ad7697cd8acdf245c6ef69d03"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/20e6333c0067875ad7697cd8acdf245c6ef69d03",
+                "reference": "20e6333c0067875ad7697cd8acdf245c6ef69d03",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.1|^8.0"
+            },
+            "conflict": {
+                "phpstan/phpstan-shim": "*"
+            },
+            "bin": [
+                "phpstan",
+                "phpstan.phar"
+            ],
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "0.12-dev"
+                }
+            },
+            "autoload": {
+                "files": [
+                    "bootstrap.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "PHPStan - PHP Static Analysis Tool",
+            "support": {
+                "issues": "https://github.com/phpstan/phpstan/issues",
+                "source": "https://github.com/phpstan/phpstan/tree/0.12.85"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/ondrejmirtes",
+                    "type": "github"
+                },
+                {
+                    "url": "https://www.patreon.com/phpstan",
+                    "type": "patreon"
+                },
+                {
+                    "url": "https://tidelift.com/funding/github/packagist/phpstan/phpstan",
+                    "type": "tidelift"
+                }
+            ],
+            "time": "2021-04-27T14:13:16+00:00"
+        },
+        {
+            "name": "spitfire/exception",
             "version": "v0.1.1",
             "source": {
                 "type": "git",
+                "url": "https://phabricator.magic3w.com/source/spitfire-exception.git",
+                "reference": "02b1d64efe48d8a379013cd341e7865c0768779f"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^0.12.71",
+                "phpunit/phpunit": "^9.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "spitfire\\exceptions\\": "./src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "César de la Cal Bretschneider",
+                    "email": "cesar@magic3w.com"
+                }
+            ],
+            "description": "Exception interfaces for spitfire",
+            "time": "2021-02-06T15:12:59+00:00"
+        },
+        {
+            "name": "spitfire/request",
+            "version": "v0.1.2",
+            "source": {
+                "type": "git",
                 "url": "https://phabricator.magic3w.com/source/spitfire-request.git",
-                "reference": "0e8166d802e0e71dd12365bca0215043c9df37d2"
+                "reference": "cabee05f5eb1c593cb9fbbe895239b5fd52fb5b5"
             },
             "require": {
-                "magic3w/url-reflection": "dev-master"
+                "ext-curl": "*",
+                "magic3w/url-reflection": "^0.1.2",
+                "phpstan/phpstan": "^0.12.82",
+                "spitfire/exception": "^0.1.1"
             },
             "require-dev": {
                 "phpunit/phpunit": "^9.4"
@@ -145,16 +239,14 @@
                 }
             ],
             "description": "Spitfire request mechanism",
-            "time": "2021-01-21T07:59:55+00:00"
+            "time": "2021-03-31T09:15:07+00:00"
         }
     ],
     "packages-dev": [],
     "aliases": [],
-    "minimum-stability": "stable",
-    "stability-flags": {
-        "magic3w/url-reflection": 20
-    },
-    "prefer-stable": false,
+    "minimum-stability": "dev",
+    "stability-flags": [],
+    "prefer-stable": true,
     "prefer-lowest": false,
     "platform": [],
     "platform-dev": [],
