@@ -63,10 +63,15 @@ class Token
 	}
 	
 	/**
-	 * Indicates whether the token is still valid.
+	 * Indicates whether the session was expired, or whether the session is still active.
 	 * 
 	 * @return bool
 	 */
+	public function isExpired() : bool
+	{
+		return time() > $this->expires;
+	}
+	
 	public function isAuthenticated() {
 		return $this->expires > time();
 	}
