@@ -4,19 +4,97 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "997205af2fab313d28388c068c3706de",
+    "content-hash": "7d11b0dfbe31a4b196528f7f695d700b",
     "packages": [
         {
+            "name": "lcobucci/jwt",
+            "version": "3.4.5",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/lcobucci/jwt.git",
+                "reference": "511629a54465e89a31d3d7e4cf0935feab8b14c1"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/lcobucci/jwt/zipball/511629a54465e89a31d3d7e4cf0935feab8b14c1",
+                "reference": "511629a54465e89a31d3d7e4cf0935feab8b14c1",
+                "shasum": ""
+            },
+            "require": {
+                "ext-mbstring": "*",
+                "ext-openssl": "*",
+                "php": "^5.6 || ^7.0"
+            },
+            "require-dev": {
+                "mikey179/vfsstream": "~1.5",
+                "phpmd/phpmd": "~2.2",
+                "phpunit/php-invoker": "~1.1",
+                "phpunit/phpunit": "^5.7 || ^7.3",
+                "squizlabs/php_codesniffer": "~2.3"
+            },
+            "suggest": {
+                "lcobucci/clock": "*"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "3.1-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Lcobucci\\JWT\\": "src"
+                },
+                "files": [
+                    "compat/class-aliases.php",
+                    "compat/json-exception-polyfill.php",
+                    "compat/lcobucci-clock-polyfill.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "authors": [
+                {
+                    "name": "Luís Otávio Cobucci Oblonczyk",
+                    "email": "lcobucci@gmail.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "A simple library to work with JSON Web Token and JSON Web Signature",
+            "keywords": [
+                "JWS",
+                "jwt"
+            ],
+            "support": {
+                "issues": "https://github.com/lcobucci/jwt/issues",
+                "source": "https://github.com/lcobucci/jwt/tree/3.4.5"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/lcobucci",
+                    "type": "github"
+                },
+                {
+                    "url": "https://www.patreon.com/lcobucci",
+                    "type": "patreon"
+                }
+            ],
+            "time": "2021-02-16T09:40:01+00:00"
+        },
+        {
             "name": "magic3w/url-reflection",
-            "version": "v0.1.0",
+            "version": "dev-master",
             "source": {
                 "type": "git",
                 "url": "https://phabricator.magic3w.com/source/url-reflection.git",
-                "reference": "23bcb67767893f9225befba28cfc3aba30bf1b43"
+                "reference": "341d1ede12d28159101b77c8ae12b544dba15a8c"
             },
             "require-dev": {
                 "phpunit/phpunit": "^9.3"
             },
+            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -34,18 +112,18 @@
                 }
             ],
             "description": "Allows applications to have a URL parsed and retrieve information about it's components",
-            "time": "2020-09-11T13:26:04+00:00"
+            "time": "2021-02-11T13:17:34+00:00"
         },
         {
             "name": "spitfire/request",
-            "version": "v0.1.0",
+            "version": "v0.1.1",
             "source": {
                 "type": "git",
-                "url": "https://phabricator.magic3w.com/source/spitifire-request.git",
-                "reference": "d3b3801273b7d65f42e974834a0658d9255caacd"
+                "url": "https://phabricator.magic3w.com/source/spitfire-request.git",
+                "reference": "0e8166d802e0e71dd12365bca0215043c9df37d2"
             },
             "require": {
-                "magic3w/url-reflection": "^0.1.0"
+                "magic3w/url-reflection": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^9.4"
@@ -67,13 +145,15 @@
                 }
             ],
             "description": "Spitfire request mechanism",
-            "time": "2020-10-15T16:00:20+00:00"
+            "time": "2021-01-21T07:59:55+00:00"
         }
     ],
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": [],
+    "stability-flags": {
+        "magic3w/url-reflection": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": [],

@@ -2,6 +2,9 @@
 
 use CURLFile;
 use Exception;
+use Lcobucci\JWT\Configuration;
+use Lcobucci\JWT\Signer\Hmac\Sha256;
+use Lcobucci\JWT\Signer\Key\InMemory;
 Use spitfire\io\request\Request;
 use magic3w\http\url\reflection\URLReflection;
 
@@ -11,6 +14,8 @@ class SSO
 	private $endpoint;
 	private $appId;
 	private $appSecret;
+	
+	private $jwt;
 	
 	public function __construct($credentials) {
 		$reflection = URLReflection::fromURL($credentials);
@@ -22,6 +27,8 @@ class SSO
 		if (!$this->appSecret) {
 			throw new Exception('App Secret is missing', 1807021658);
 		}
+		
+		$this->jwt = Configuration::forSymmetricSigner(new Sha256, InMemory::base64Encoded($this->appSecret));
 	}
 
 	/**
@@ -63,7 +70,8 @@ class SSO
 	 * This mechanism intends to make it simple for the applications to generate new tokens
 	 * for the first scenario, by providing a code and a verifier to the table.
 	 */
-	public function token($code, $verifier, $audience = null) {
+	public function token($code, $verifier, $audience = null) 
+	{
 		$request = URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint));
 		$request->post('code', $code);
 		$request->post('type', 'code');
@@ -74,7 +82,7 @@ class SSO
 		$response = $request->send()->expect(200)->json();
 		
 		return [
-			'access'  => new Token($this, $response->tokens->access->token, $response->tokens->access->expires),
+			'access'  => new Token($this, $this->jwt->parser()->parse($response->tokens->access->token), $response->tokens->access->expires),
 			'refresh' => new RefreshToken($this, $response->tokens->refresh->token, $response->tokens->refresh->expires)
 		];
 	}

@@ -18,6 +18,7 @@
 	
 	"require": {
 		"magic3w/url-reflection": "dev-master",
-		"spitfire/request": "dev-master"
+		"spitfire/request": "^0.1.1",
+		"lcobucci/jwt": "^3.4"
 	}
 }
