@@ -11,17 +11,40 @@ use magic3w\http\url\reflection\URLReflection;
 class SSO
 {
 	
+	/**
+	 * 
+	 * @var string
+	 */
 	private $endpoint;
+	
+	/**
+	 * 
+	 * @var int
+	 */
 	private $appId;
+	
+	/**
+	 * 
+	 * @var string
+	 */
 	private $appSecret;
 	
+	/**
+	 * 
+	 * @var Configuration
+	 */
 	private $jwt;
 	
-	public function __construct($credentials) {
+	/**
+	 * 
+	 * @param string $credentials
+	 */
+	public function __construct(string $credentials) 
+	{
 		$reflection = URLReflection::fromURL($credentials);
 		
-		$this->endpoint  = rtrim($reflection->getProtocol() . '://' . $reflection->getServer() . ':' . $reflection->getPort() . $reflection->getPath(), '/');
-		$this->appId     = $reflection->getUser();
+		$this->endpoint  = rtrim($reflection->getProtocol() . '://' . $reflection->getHostname() . ':' . $reflection->getPort() . $reflection->getPath(), '/');
+		$this->appId     = (int)$reflection->getUser();
 		$this->appSecret = $reflection->getPassword();
 		
 		if (!$this->appSecret) {
@@ -40,19 +63,25 @@ class SSO
 	 * I would like to avoid using the word request for whatever is happening
 	 * at this stage of the connection.
 	 * 
-	 * @param string $host The app ID of the application this client wishes to access data from. This may
+	 * @param string $state
+	 * @param string $verifier_challenge
+	 * @param string $returnto
+	 * @param int|null $audience The app ID of the application this client wishes to access data from. This may
 	 *        be null if the application wishes to access the client account on PHPAS.
-	 * 
-	 * @todo Include a target in the access code request so we can request a token for another app
 	 * @return string
 	 */
-	public function makeAccessCodeRedirect($state, $verifier_challenge, $returnto, $audience = null) {
+	public function makeAccessCodeRedirect(string $state, string $verifier_challenge, string $returnto, int $audience = null) : string
+	{
 		
-		$request = URLReflection::fromURL(sprintf('%s/auth/oauth', $this->endpoint));
+		$request = new Request(sprintf('%s/auth/oauth', $this->endpoint));
 		$request->get('response_type', 'code');
 		$request->get('client', $this->appId);
 		$request->get('state', $state);
-		$audience && $request->get('audience', $audience);
+		
+		if ($audience) { 
+			$request->post('audience', (string)$audience); 
+		}
+		
 		$request->get('redirect', $returnto);
 		$request->get('code_challenge', hash('sha256', $verifier_challenge));
 		$request->get('code_challenge_method', 'S256');
@@ -69,16 +98,25 @@ class SSO
 	 * 
 	 * This mechanism intends to make it simple for the applications to generate new tokens
 	 * for the first scenario, by providing a code and a verifier to the table.
+	 * 
+	 * @param string $code
+	 * @param string $verifier
+	 * @param int|null $audience
+	 * @return array{'access': Token, 'refresh': RefreshToken}
 	 */
-	public function token($code, $verifier, $audience = null) 
+	public function token(string $code, string $verifier, int $audience = null) : array
 	{
-		$request = URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint));
+		$request = new Request(sprintf('%s/token/create.json', $this->endpoint));
 		$request->post('code', $code);
 		$request->post('type', 'code');
-		$request->post('client', $this->sso->getAppId());
-		$request->post('secret', $this->sso->getSecret());
+		$request->post('client', (string)$this->getAppId());
+		$request->post('secret', $this->appSecret);
 		$request->post('verifier', $verifier);
-		$audience && $request->post('audience', $audience);
+		
+		if ($audience) { 
+			$request->post('audience', (string)$audience); 
+		}
+		
 		$response = $request->send()->expect(200)->json();
 		
 		return [
@@ -93,8 +131,11 @@ class SSO
 	 * 
 	 * The token must be a string, if you held onto the `Token` object you received
 	 * from the API, you can extract the code by calling getToken.
+	 * 
+	 * @param string $token
+	 * @return array{'access': Token, 'refresh': RefreshToken}
 	 */
-	public function refresh(string $token) 
+	public function refresh(string $token) : array
 	{
 		$token = new RefreshToken($this, $token, null);
 		return $token->renew();
@@ -104,44 +145,46 @@ class SSO
 	 * Returns an access token that allows the application to access it's own credentials
 	 * on the server.
 	 * 
+	 * @param int|null $audience
 	 * @return Token
 	 */
-	public function credentials($audience = null) 
+	public function credentials(int $audience = null) 
 	{
-		$request = URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint));
+		$request = new Request(URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint)));
 		$request->post('type', 'client_credentials');
-		$request->post('client', $this->sso->getAppId());
-		$request->post('secret', $this->sso->getSecret());
-		$audience && $request->post('audience', $audience);
+		$request->post('client', (string)$this->getAppId());
+		$request->post('secret', $this->appSecret);
+		
+		/**
+		 * If the application did ask for credentials to another application, we will add this
+		 * to the audience.
+		 */
+		if ($audience) { 
+			$request->post('audience', (string)$audience); 
+		}
+		
 		$response = $request->send()->expect(200)->json();
 		
 		return new Token($this, $response->tokens->access->token, $response->tokens->access->expires);
 	}
 	
 	/**
-	 * @deprecated PHPAS does no longer send email, refer to stat for this.
+	 * The base URL of the PHPAuth Server
+	 * 
+	 * @return string
 	 */
-	public function sendEmail($userid, $subject, $body) {
-		
-		$request = new Request(
-			$this->endpoint . '/email/send/' . $userid . '.json',
-			Array('appId' => $this->appId, 'appSecret' => $this->appSecret)
-		);
-		
-		$request->post('body', $body);
-		$request->post('subject', $subject);
-
-		$response = $request->send();
-		$data = ($response)->expect(200)->json()->payload;
-		
-		return $data;
-	}
-	
-	public function getEndpoint() {
+	public function getEndpoint() : string
+	{
 		return $this->endpoint;
 	}
 	
-	public function getAppId() {
+	/**
+	 * The app id of the application that is authenticating this client.
+	 * 
+	 * @return int
+	 */
+	public function getAppId() : int
+	{
 		return $this->appId;
 	}
 	
@@ -158,11 +201,11 @@ class SSO
 	/**
 	 * 
 	 * @deprecated since version 0.1-dev
-	 * @return type
+	 * @return object
 	 */
 	public function getAppDrawer() {
 		$url = $this->endpoint . '/appdrawer/index.json';
-		$request  = new Request($url, []);
+		$request  = new Request($url);
 		
 		$response = $request->send()->expect(200)->json();
 		
@@ -172,20 +215,31 @@ class SSO
 	/**
 	 * 
 	 * @deprecated since version 0.1-dev
-	 * @return type
+	 * @return string
 	 */
 	public function getAppDrawerJS() {
 		return $this->endpoint . '/appdrawer/index.js';
 	}
 	
-	public function getGroupList() {
+	/**
+	 * 
+	 * @return object
+	 */
+	public function getGroupList() : object
+	{
 		$url  = new Request($this->endpoint . '/group/index.json');
 		$resp = $url->send()->expect(200)->json();
 		
 		return $resp->payload;
 	}
 	
-	public function getGroup($id) {
+	/**
+	 * 
+	 * @param string $id
+	 * @return object
+	 */
+	public function getGroup(string $id) : object
+	{
 		$url  = new Request($this->endpoint . '/group/detail/' . $id . '.json');
 		return $url->send()->expect(200)->json()->payload;
 	}
@@ -204,12 +258,13 @@ class SSO
 	 */
 	public function putScope($id, $name, $description, $icon = null) : void
 	{
-		$request = new Request(
-			sprintf('%s/scope/create/%s.json', $this->getEndpoint(), $id), 
-			['token' => (string)$this->credentials()->getId()]
-		);
+		$request = new Request(sprintf('%s/scope/create/%s.json', $this->getEndpoint(), $id));
 		
-		$request->send(['name' => $name, 'description' => $description, 'icon' => new CURLFile($icon)]);
+		$request->get('token', (string)$this->credentials()->getId());
+		$request->post('name', $name);
+		$request->post('description', $description);
+		$request->post('icon', new CURLFile($icon));
+		$request->send();
 	}
 	
 	/**
@@ -231,8 +286,10 @@ class SSO
 	 * 
 	 * @param Token $token
 	 * @param string $returnto
+	 * @return string
 	 */
-	public function getLogoutLink(Token $token, string $returnto) {
+	public function getLogoutLink(Token $token, string $returnto) : string
+	{
 		return $this->endpoint . '/user/logout?' . http_build_query(['returnto' => $returnto, 'token' => $token->getId()]);
 	}
 	

@@ -1,38 +1,73 @@
 <?php namespace magic3w\phpauth\sdk;
 
 use Exception;
+use spitfire\io\request\Request;
 
 class Token
 {
 	
+	/**
+	 * 
+	 * @var SSO
+	 */
 	private $sso;
+	
+	/**
+	 * 
+	 * @var string
+	 */
 	private $token;
+	
+	/**
+	 * 
+	 * @var int
+	 */
 	private $expires;
 	
-	public function __construct($sso, $token, $expires) {
+	/**
+	 * 
+	 * @param SSO $sso
+	 * @param string $token
+	 * @param int $expires
+	 */
+	public function __construct(SSO $sso, string $token, int $expires)
+	{
 		$this->sso = $sso;
 		$this->token = $token;
 		$this->expires = $expires;
 	}
 	
+	/**
+	 * Returns the token's ID
+	 * 
+	 * @return string
+	 */
 	public function getId() {
 		return $this->token;
 	}
 	
+	/**
+	 * 
+	 * @deprecated since v0.1.1 (20210331)
+	 * @return mixed
+	 */
 	public function getTokenInfo() {
 		static $cache = null;
 		
 		if ($cache !== null) { return $cache; }
 		
-		$response = file_get_contents($this->sso->getEndpoint() . '/auth/index/' . $this->token . '.json');
+		$request  = new Request($this->sso->getEndpoint() . '/auth/index/' . $this->token . '.json');
+		$response = $request->send()->expect(200)->json();
 		
-		if (!isset($http_response_header))            { throw new Exception('SSO connection failed'); }
-		if (!strstr($http_response_header[0], '200')) { throw new Exception('SSO error'); }
-		
-		return $cache = json_decode($response);
+		return $cache = $response;
 	}
 	
+	/**
+	 * Indicates whether the token is still valid.
+	 * 
+	 * @return bool
+	 */
 	public function isAuthenticated() {
-		return $this->getTokenInfo()->authenticated;
+		return $this->expires > time();
 	}
 }

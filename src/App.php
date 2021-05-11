@@ -27,42 +27,38 @@
 class App
 {
 	
+	/**
+	 * 
+	 * @var int
+	 */
 	private $id;
 	
-	private $secret;
-	
-	private $name;
-	
-	public function __construct($id, $secret, $name) {
+	/**
+	 * 
+	 * @param int $id
+	 */
+	public function __construct(int $id) 
+	{
 		$this->id = $id;
-		$this->secret = $secret;
-		$this->name = $name;
 	}
 	
-	public function getId() {
+	/**
+	 * 
+	 * @return int
+	 */
+	public function getId() : int
+	{
 		return $this->id;
 	}
 	
-	public function getSecret() {
-		return $this->secret;
-	}
-	
-	public function getName() {
-		return $this->name;
-	}
-	
-	public function setId($id) {
+	/**
+	 * 
+	 * @param int $id
+	 * @return App
+	 */
+	public function setId(int $id) : App
+	{
 		$this->id = $id;
-		return $this;
-	}
-	
-	public function setSecret($secret) {
-		$this->secret = $secret;
-		return $this;
-	}
-	
-	public function setName($name) {
-		$this->name = $name;
 		return $this;
 	}
 	

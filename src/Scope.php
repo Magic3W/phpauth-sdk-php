@@ -26,64 +26,79 @@ use spitfire\io\request\Request;
  * THE SOFTWARE.
  */
 
+/**
+ * The scope of an application defines a namespace within it, which allows the applications
+ * to request granular control instead of demanding blanket access to the data.
+ * 
+ * For example, when the application whishes to log the user into it, it just needs access
+ * to the user's basic data, there's no need to access (for example) the user's shopping history.
+ */
 class Scope
 {
 	
-	private $sso;
+	/**
+	 * The application that contains the scope.
+	 * 
+	 * @var App
+	 */
 	private $app;
+	
+	/**
+	 * The name of the scope. This is unique within an application.
+	 * 
+	 * @var string
+	 */
 	private $id;
-	private $exists = null;
-	private $granted = null;
 	
 	/**
 	 * 
-	 * @param SSO    $sso
 	 * @param App    $app
 	 * @param string $id
 	 */
-	public function __construct($sso, $app, $id) {
-		$this->sso = $sso;
+	public function __construct(App $app, string $id) 
+	{
 		$this->app = $app;
 		$this->id = $id;
 	}
 	
-	public function getApp() {
+	/**
+	 * 
+	 * @return App
+	 */
+	public function getApp() : App
+	{
 		return $this->app;
 	}
 	
-	public function getId() {
+	/**
+	 * 
+	 * @return string
+	 */
+	public function getId() : string
+	{
 		return $this->id;
 	}
 	
-	public function exists() {
-		return $this->exists;
-	}
-	
-	public function setApp($app) {
+	/**
+	 * 
+	 * @param App $app
+	 * @return Scope
+	 */
+	public function setApp(App $app) : Scope
+	{
 		$this->app = $app;
 		return $this;
 	}
 	
-	public function setId($name) {
+	/**
+	 * 
+	 * @param string $name
+	 * @return Scope
+	 */
+	public function setId(string $name) : Scope
+	{
 		$this->id = $name;
 		return $this;
-	}
-	
-	public function setExists($exists) {
-		$this->exists = $exists;
-		return $this;
-	}
-	
-	public function setGranted($granted) {
-		$this->granted = $granted;
-	}
-	
-	public function isGranted() {
-		return ((int)$this->granted) === 2;
-	}
-	
-	public function isDenied() {
-		return ((int)$this->granted) === 1;
 	}
 
 }
