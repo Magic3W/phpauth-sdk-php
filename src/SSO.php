@@ -1,15 +1,31 @@
 <?php namespace magic3w\phpauth\sdk;
 
-use CURLFile;
 use Exception;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Utils;
 use Lcobucci\JWT\Configuration;
 use Lcobucci\JWT\Signer\Hmac\Sha256;
 use Lcobucci\JWT\Signer\Key\InMemory;
 Use spitfire\io\request\Request;
 use magic3w\http\url\reflection\URLReflection;
+use spitfire\exceptions\user\ApplicationException;
 
 class SSO
 {
+	
+	/**
+	 * This client will be in charge of sending our requests to the server.
+	 * 
+	 * The change to guzzle is requiring us to reconsider the way we handle HTTP requests,
+	 * previously we would have used this class to create a request and have the applications
+	 * relying on it change the request as needed.
+	 * 
+	 * This is currently not available, since Guzzle requires the client object to be
+	 * used in tandem with the request objects.
+	 * 
+	 * @var Client
+	 */
+	private $client;
 	
 	/**
 	 * 
@@ -51,6 +67,7 @@ class SSO
 			throw new Exception('App Secret is missing', 1807021658);
 		}
 		
+		$this->client = new Client(['base_uri' => $this->endpoint]);
 		$this->jwt = Configuration::forSymmetricSigner(new Sha256, InMemory::base64Encoded($this->appSecret));
 	}
 
@@ -73,18 +90,18 @@ class SSO
 	public function makeAccessCodeRedirect(string $state, string $verifier_challenge, string $returnto, int $audience = null) : string
 	{
 		
-		$request = new Request(sprintf('%s/auth/oauth', $this->endpoint));
-		$request->get('response_type', 'code');
-		$request->get('client', $this->appId);
-		$request->get('state', $state);
+		$query = [
+			'response_type' => 'code',
+			'client' => $this->appId,
+			'audience' => (string)$audience,
+			'state' => $state,
+			'redirect' => $returnto,
+			'code_challenge' => hash('sha256', $verifier_challenge),
+			'code_challenge_method' => 'S256'
+		];
 		
-		if ($audience) { 
-			$request->post('audience', (string)$audience); 
-		}
-		
-		$request->get('redirect', $returnto);
-		$request->get('code_challenge', hash('sha256', $verifier_challenge));
-		$request->get('code_challenge_method', 'S256');
+		$request = URLReflection::fromURL(sprintf('%s/auth/oauth', $this->endpoint));
+		$request->setQueryString($query);
 
 		return strval($request);
 	}
@@ -106,18 +123,25 @@ class SSO
 	 */
 	public function token(string $code, string $verifier, int $audience = null) : array
 	{
-		$request = new Request(sprintf('%s/token/create.json', $this->endpoint));
-		$request->post('code', $code);
-		$request->post('type', 'code');
-		$request->post('client', (string)$this->getAppId());
-		$request->post('secret', $this->appSecret);
-		$request->post('verifier', $verifier);
+		$post = [
+			['name' => 'type', 'contents' => 'code'],
+			['name' => 'code', 'contents' => $code],
+			['name' => 'client', 'contents' => (string)$this->getAppId()],
+			['name' => 'audience', 'contents' => (string)$audience],
+			['name' => 'secret', 'contents' => $this->appSecret],
+			['name' => 'verifier', 'contents' => $verifier]
+		];
 		
-		if ($audience) { 
-			$request->post('audience', (string)$audience); 
-		}
+		$response = $this->request('/token/create.json', $post);
 		
-		$response = $request->send()->expect(200)->json();
+		/**
+		 * These assertions are only executed in a development environment, allowing servers running
+		 * in production to ignore these and assume that the response they received from the other 
+		 * party is safe.
+		 */
+		assert(is_object($response) && isset($response->tokens));
+		assert($response->tokens->access && $response->tokens->access->token);
+		assert($response->tokens->refresh && $response->tokens->refresh->token);
 		
 		return [
 			'access'  => new Token($this, $this->jwt->parser()->parse($response->tokens->access->token), $response->tokens->access->expires),
@@ -150,20 +174,23 @@ class SSO
 	 */
 	public function credentials(int $audience = null) 
 	{
-		$request = new Request(URLReflection::fromURL(sprintf('%s/token/create.json', $this->endpoint)));
-		$request->post('type', 'client_credentials');
-		$request->post('client', (string)$this->getAppId());
-		$request->post('secret', $this->appSecret);
+		
+		$post = [
+			['name' => 'type', 'contents' => 'client_credentials'],
+			['name' => 'client', 'contents' => (string)$this->getAppId()],
+			['name' => 'audience', 'contents' => (string)$audience],
+			['name' => 'secret', 'contents' => $this->appSecret],
+		];
+		
+		$response = $this->request('/token/create.json', $post);
 		
 		/**
-		 * If the application did ask for credentials to another application, we will add this
-		 * to the audience.
+		 * These assertions are only executed in a development environment, allowing servers running
+		 * in production to ignore these and assume that the response they received from the other 
+		 * party is safe.
 		 */
-		if ($audience) { 
-			$request->post('audience', (string)$audience); 
-		}
-		
-		$response = $request->send()->expect(200)->json();
+		assert(is_object($response) && isset($response->tokens));
+		assert($response->tokens->access && $response->tokens->access->token);
 		
 		return new Token($this, $response->tokens->access->token, $response->tokens->access->expires);
 	}
@@ -200,36 +227,12 @@ class SSO
 	
 	/**
 	 * 
-	 * @deprecated since version 0.1-dev
-	 * @return object
-	 */
-	public function getAppDrawer() {
-		$url = $this->endpoint . '/appdrawer/index.json';
-		$request  = new Request($url);
-		
-		$response = $request->send()->expect(200)->json();
-		
-		return $response;
-	}
-	
-	/**
-	 * 
-	 * @deprecated since version 0.1-dev
-	 * @return string
-	 */
-	public function getAppDrawerJS() {
-		return $this->endpoint . '/appdrawer/index.js';
-	}
-	
-	/**
-	 * 
 	 * @return object
 	 */
 	public function getGroupList() : object
 	{
-		$url  = new Request($this->endpoint . '/group/index.json');
-		$resp = $url->send()->expect(200)->json();
-		
+		$resp = $this->request('/group/index.json');
+		assert(isset($resp->payload));
 		return $resp->payload;
 	}
 	
@@ -240,8 +243,9 @@ class SSO
 	 */
 	public function getGroup(string $id) : object
 	{
-		$url  = new Request($this->endpoint . '/group/detail/' . $id . '.json');
-		return $url->send()->expect(200)->json()->payload;
+		$resp = $this->request('/group/detail/' . $id . '.json');
+		assert(isset($resp->payload));
+		return $resp->payload;
 	}
 	
 	
@@ -258,13 +262,14 @@ class SSO
 	 */
 	public function putScope($id, $name, $description, $icon = null) : void
 	{
-		$request = new Request(sprintf('%s/scope/create/%s.json', $this->getEndpoint(), $id));
+		$post = [
+			['name' => 'token', 'contents' => (string)$this->credentials()->getId()],
+			['name' => 'name', 'contents' => $name],
+			['name' => 'description', 'contents' => $description],
+			['name' => 'icon', 'contents' => Utils::tryFopen($icon, 'r'), 'filename' => basename($icon)]
+		];
 		
-		$request->get('token', (string)$this->credentials()->getId());
-		$request->post('name', $name);
-		$request->post('description', $description);
-		$request->post('icon', new CURLFile($icon));
-		$request->send();
+		$this->request(sprintf('/scope/create/%s.json', $id), $post);
 	}
 	
 	/**
@@ -293,5 +298,59 @@ class SSO
 		return $this->endpoint . '/user/logout?' . http_build_query(['returnto' => $returnto, 'token' => $token->getId()]);
 	}
 	
+	
+	/**
+	 * Prepares a authenticated request that all objects can use to interact with
+	 * the API.
+	 * 
+	 * @param string $url
+	 * @param mixed[][] $payload
+	 * @param string[] $query
+	 * @param string[] $headers
+	 * @return object The raw response from the server (JSON decoded).
+	 */
+	private function request($url, array $payload = [], array $query = [], array $headers = []) : object
+	{
+		/**
+		 * Send a request to the server and harvest the response.
+		 */
+		$response = $this->client->post(
+			$url,
+			[
+				'headers' => $headers, 
+				'multipart' => $payload,
+				'query' => $query
+			]
+		);
+		
+		/**
+		 * With a bad status code, the application should not proceed. This means that the server ran into a 
+		 * special condition that we did not anticipate and that we need to handle since it's outside
+		 * the scope of the client.
+		 * 
+		 * @todo Introduce special SSO Network exception type
+		 */
+		if ($response->getStatusCode() !== 200) {
+			throw new ApplicationException(
+				'The authentication server replied with an invalid response code', 
+				$response->getStatusCode()
+			);
+		}
+		
+		/**
+		 * Parse the server's response. Please note that the server will ALWAYS reply to API requests with
+		 * valid json. If this is not the case, the request went wrong or the server is misconfigured.
+		 * 
+		 * This means that we cannot continue with the execution.
+		 */
+		$responsePayload = json_decode((string)$response->getBody());
+		
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			throw new ApplicationException('The server replied with malformed JSON', 2107071256);
+		}
+		
+		return $responsePayload;
+		
+	}
 }
 

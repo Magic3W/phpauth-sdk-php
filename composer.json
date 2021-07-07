@@ -26,7 +26,11 @@
 	
 	"require": {
 		"magic3w/url-reflection": "^0.1.2",
-		"spitfire/request": "^0.1.2",
-		"lcobucci/jwt": "^3.4"
+		"lcobucci/jwt": "^3.4",
+		"guzzlehttp/guzzle": "^7.3",
+		"spitfire/exception": "^0.1.1"
+	},
+	"require-dev": {
+		"phpstan/phpstan": "^0.12.91"
 	}
 }
