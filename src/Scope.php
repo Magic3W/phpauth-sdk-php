@@ -100,5 +100,4 @@ class Scope
 		$this->id = $name;
 		return $this;
 	}
-
 }

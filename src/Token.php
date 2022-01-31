@@ -1,6 +1,7 @@
 <?php namespace magic3w\phpauth\sdk;
 
 use \Lcobucci\JWT\Token\RegisteredClaims;
+use Lcobucci\JWT\UnencryptedToken;
 
 class Token
 {
@@ -13,7 +14,7 @@ class Token
 	
 	/**
 	 * 
-	 * @var string
+	 * @var UnencryptedToken
 	 */
 	private $token;
 	
@@ -23,7 +24,8 @@ class Token
 	 */
 	private $expires;
 	
-	public function __construct(SSO $sso, \Lcobucci\JWT\Token $token, int $expires) {
+	public function __construct(SSO $sso, UnencryptedToken $token, int $expires)
+	{
 		$this->sso = $sso;
 		$this->token = $token;
 		$this->expires = $expires;
@@ -34,8 +36,9 @@ class Token
 	 * 
 	 * @return string
 	 */
-	public function getId() {
-		return $this->token;
+	public function getId() : string
+	{
+		return $this->token->claims()->get(RegisteredClaims::ID);
 	}
 	
 	/**
@@ -48,7 +51,13 @@ class Token
 		return time() > $this->expires;
 	}
 	
-	public function isAuthenticated() {
+	/**
+	 * Whether the token is still valid.
+	 * 
+	 * @return bool
+	 */
+	public function isAuthenticated() : bool
+	{
 		return $this->expires > time();
 	}
 	
@@ -65,7 +74,8 @@ class Token
 		 * We know that the token can only have one audience. So we use the first item of the
 		 * claims array.
 		 */
-		return reset($this->token->claims->get(RegisteredClaims::AUDIENCE, []));
+		$claims = $this->token->claims()->get(RegisteredClaims::AUDIENCE, []);
+		return reset($claims);
 	}
 	
 	/**
@@ -80,12 +90,13 @@ class Token
 	 * 
 	 * @return int The app id of the client attemptin to access the data
 	 */
-	public function client () 
+	public function client() 
 	{
 		/**
 		 * We know that the token can only have one issuing client. So we use the first item of the
 		 * claims array.
 		 */
-		return reset($this->token->claims->get(RegisteredClaims::ISSUER, []));
+		$claims = $this->token->claims()->get(RegisteredClaims::ISSUER, []);
+		return reset($claims);
 	}
 }

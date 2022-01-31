@@ -61,5 +61,4 @@ class App
 		$this->id = $id;
 		return $this;
 	}
-	
 }

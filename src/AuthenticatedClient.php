@@ -95,11 +95,10 @@ abstract class AuthenticatedClient
 	 */
 	public function __construct($credentials, $endpoint) 
 	{
-		if ($credentials instanceof SSO) 
-		{
+		if ($credentials instanceof SSO) {
 			$reflection = URLReflection::fromURL($endpoint);
 			$appid = $reflection->getUser();
-
+			
 			$this->endpoint  = (string)$reflection->stripCredentials();
 			$this->credentials = $credentials->credentials((int)$appid);
 		}
@@ -129,5 +128,4 @@ abstract class AuthenticatedClient
 	{
 		return $this->client->sendRequest($request);
 	}
-
 }

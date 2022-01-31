@@ -20,6 +20,7 @@
 	
 	"scripts": {
 		"test": [
+			"./vendor/bin/phpcs . -s",
 			"./vendor/bin/phpstan analyse ./src --level 7"
 		]
 	},
@@ -31,6 +32,15 @@
 		"spitfire/exception": "^0.1.1"
 	},
 	"require-dev": {
-		"phpstan/phpstan": "^0.12.91"
-	}
+		"phpstan/phpstan": "^0.12.91",
+		"squizlabs/php_codesniffer": "dev-dev/scope-indent-blank-lines"
+	},
+
+	"repositories":
+	[
+			{
+				"type": "vcs",
+				"url": "https://github.com/Csardelacal/PHP_Codesniffer"
+			}
+	]
 }

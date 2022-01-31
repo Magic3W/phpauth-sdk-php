@@ -61,8 +61,15 @@ class User
 	 * @param int $registered
 	 * @param object $avatar
 	 */
-	public function __construct(int $id, string $username, array $aliases, array $groups, bool $verified, int $registered, object $avatar) 
-	{
+	public function __construct(
+		int $id, 
+		string $username, 
+		array $aliases, 
+		array $groups, 
+		bool $verified, 
+		int $registered, 
+		object $avatar
+	) {
 		$this->id = $id;
 		$this->username = $username;
 		$this->aliases = $aliases;
@@ -78,7 +85,8 @@ class User
 	 * 
 	 * @return int
 	 */
-	public function getId() {
+	public function getId()
+	{
 		return $this->id;
 	}
 	
@@ -112,6 +120,4 @@ class User
 	{
 		return $this->groups;
 	}
-	
 }
-

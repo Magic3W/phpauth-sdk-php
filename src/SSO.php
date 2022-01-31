@@ -6,7 +6,8 @@ use GuzzleHttp\Psr7\Utils;
 use Lcobucci\JWT\Configuration;
 use Lcobucci\JWT\Signer\Hmac\Sha256;
 use Lcobucci\JWT\Signer\Key\InMemory;
-Use spitfire\io\request\Request;
+use Lcobucci\JWT\UnencryptedToken;
+use spitfire\io\request\Request;
 use magic3w\http\url\reflection\URLReflection;
 use spitfire\exceptions\user\ApplicationException;
 
@@ -58,8 +59,10 @@ class SSO
 	public function __construct(string $credentials) 
 	{
 		$reflection = URLReflection::fromURL($credentials);
+		$path = $reflection->getPath();
+		$host = $reflection->getProtocol() . '://' . $reflection->getHostname() . ':' . $reflection->getPort();
 		
-		$this->endpoint  = rtrim($reflection->getProtocol() . '://' . $reflection->getHostname() . ':' . $reflection->getPort() . $reflection->getPath(), '/');
+		$this->endpoint  = rtrim($host . $path, '/');
 		$this->appId     = (int)$reflection->getUser();
 		$this->appSecret = $reflection->getPassword();
 		
@@ -70,7 +73,7 @@ class SSO
 		$this->client = new Client(['base_uri' => $this->endpoint]);
 		$this->jwt = Configuration::forSymmetricSigner(new Sha256, InMemory::base64Encoded($this->appSecret));
 	}
-
+	
 	/**
 	 * Generates a URL to direct the user agent to in order to initiate
 	 * the authentication. Please note that the oAuth 2.0 protocol uses the user
@@ -87,8 +90,12 @@ class SSO
 	 *        be null if the application wishes to access the client account on PHPAS.
 	 * @return string
 	 */
-	public function makeAccessCodeRedirect(string $state, string $verifier_challenge, string $returnto, int $audience = null) : string
-	{
+	public function makeAccessCodeRedirect(
+		string $state, 
+		string $verifier_challenge, 
+		string $returnto, 
+		int $audience = null
+	) : string {
 		
 		$query = [
 			'response_type' => 'code',
@@ -102,7 +109,7 @@ class SSO
 		
 		$request = URLReflection::fromURL(sprintf('%s/auth/oauth', $this->endpoint));
 		$request->setQueryString($query);
-
+		
 		return strval($request);
 	}
 	
@@ -143,8 +150,13 @@ class SSO
 		assert($response->tokens->access && $response->tokens->access->token);
 		assert($response->tokens->refresh && $response->tokens->refresh->token);
 		
+		$access = $response->tokens->access;
+		$parsed = $this->jwt->parser()->parse($access->token);
+		
+		assert($parsed instanceof UnencryptedToken);
+		
 		return [
-			'access'  => new Token($this, $this->jwt->parser()->parse($response->tokens->access->token), $response->tokens->access->expires),
+			'access'  => new Token($this, $parsed, $access->expires),
 			'refresh' => new RefreshToken($this, $response->tokens->refresh->token, $response->tokens->refresh->expires)
 		];
 	}
@@ -161,8 +173,7 @@ class SSO
 	 */
 	public function refresh(string $token) : array
 	{
-		$token = new RefreshToken($this, $token, null);
-		return $token->renew();
+		return $this->renew(new RefreshToken($this, $token, null));
 	}
 	
 	/**
@@ -221,7 +232,8 @@ class SSO
 	 * 
 	 * @return string
 	 */
-	public function getSecret() {
+	public function getSecret()
+	{
 		return $this->appSecret;
 	}
 	
@@ -295,9 +307,47 @@ class SSO
 	 */
 	public function getLogoutLink(Token $token, string $returnto) : string
 	{
-		return $this->endpoint . '/user/logout?' . http_build_query(['returnto' => $returnto, 'token' => $token->getId()]);
+		$query = http_build_query(['returnto' => $returnto, 'token' => $token->getId()]);
+		return $this->endpoint . '/user/logout?' . $query;
 	}
 	
+	
+	/**
+	 * The renew method 
+	 * 
+	 * @param RefreshToken $token
+	 * @return array{'access': Token, 'refresh': RefreshToken}
+	 */
+	public function renew(RefreshToken $token) : array
+	{	
+		$post = [
+			['name' => 'type', 'contents' => 'code'],
+			['name' => 'token', 'contents' => $token->getId()],
+			['name' => 'client', 'contents' => (string)$this->getAppId()],
+			['name' => 'secret', 'contents' => $this->getSecret()]
+		];
+		
+		$response = $this->request('/token/create.json', $post);
+		
+		/**
+		 * These assertions are only executed in a development environment, allowing servers running
+		 * in production to ignore these and assume that the response they received from the other 
+		 * party is safe.
+		 */
+		assert(is_object($response) && isset($response->tokens));
+		assert($response->tokens->access && $response->tokens->access->token);
+		assert($response->tokens->refresh && $response->tokens->refresh->token);
+		
+		$access = $response->tokens->access;
+		$parsed = $this->jwt->parser()->parse($access->token);
+		
+		assert($parsed instanceof UnencryptedToken);
+		
+		return [
+			'access'  => new Token($this, $parsed, $access->expires),
+			'refresh' => new RefreshToken($this, $response->tokens->refresh->token, $response->tokens->refresh->expires)
+		];
+	}
 	
 	/**
 	 * Prepares a authenticated request that all objects can use to interact with
@@ -350,7 +400,5 @@ class SSO
 		}
 		
 		return $responsePayload;
-		
 	}
 }
-

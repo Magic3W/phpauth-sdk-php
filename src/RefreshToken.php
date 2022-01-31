@@ -41,28 +41,9 @@ class RefreshToken
 	 * 
 	 * @return string
 	 */
-	public function getId() {
+	public function getId()
+	{
 		return $this->token;
-	}
-	
-	/**
-	 * The renew method 
-	 * 
-	 * @return array{'access': Token, 'refresh': RefreshToken}
-	 */
-	public function renew() : array
-	{	
-		$request = new Request(sprintf('%s/token/create.json', $this->sso->getEndpoint()));
-		$request->post('type', 'refresh_token');
-		$request->post('token', $this->token);
-		$request->post('client', (string)$this->sso->getAppId());
-		$request->post('secret', $this->sso->getSecret());
-		$response = $request->send()->expect(200)->json();
-		
-		return [
-			'access'  => new Token($this->sso, $response->tokens->access->token, $response->tokens->access->expires),
-			'refresh' => new RefreshToken($this->sso, $response->tokens->refresh->token, $response->tokens->refresh->expires)
-		];
 	}
 	
 	/**
@@ -86,5 +67,4 @@ class RefreshToken
 	{
 		return time() > $this->expires;
 	}
-	
 }
