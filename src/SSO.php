@@ -4,11 +4,18 @@ use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Utils;
 use Lcobucci\JWT\Configuration;
+use Lcobucci\JWT\Encoding\JoseEncoder;
 use Lcobucci\JWT\Signer\Hmac\Sha256;
 use Lcobucci\JWT\Signer\Key\InMemory;
+use Lcobucci\JWT\Signer\Rsa\Sha256 as RsaSha256;
+use Lcobucci\JWT\Token\Parser;
 use Lcobucci\JWT\UnencryptedToken;
+use Lcobucci\JWT\Validation\Constraint\SignedWith;
+use Lcobucci\JWT\Validation\Validator;
 use spitfire\io\request\Request;
 use magic3w\http\url\reflection\URLReflection;
+use signature\Hash;
+use signature\Signature;
 use spitfire\exceptions\user\ApplicationException;
 
 class SSO
@@ -42,36 +49,36 @@ class SSO
 	
 	/**
 	 * 
-	 * @var string
+	 * @var non-empty-string
 	 */
-	private $appSecret;
+	private string $appSecret;
 	
 	/**
 	 * 
-	 * @var Configuration
+	 * @var non-empty-string|null
 	 */
-	private $jwt;
+	private ?string $publicKey;
 	
 	/**
 	 * 
 	 * @param string $credentials
+	 * @param null|non-empty-string $publicKey
 	 */
-	public function __construct(string $credentials) 
+	public function __construct(string $credentials, ?string $publicKey = null) 
 	{
 		$reflection = URLReflection::fromURL($credentials);
 		$path = $reflection->getPath();
 		$host = $reflection->getProtocol() . '://' . $reflection->getHostname() . ':' . $reflection->getPort();
 		
+		$secret = $reflection->getPassword();
+		assert(!empty($secret));
+		
 		$this->endpoint  = rtrim($host . $path, '/');
 		$this->appId     = (int)$reflection->getUser();
-		$this->appSecret = $reflection->getPassword();
-		
-		if (!$this->appSecret) {
-			throw new Exception('App Secret is missing', 1807021658);
-		}
+		$this->appSecret = $secret;
 		
 		$this->client = new Client(['base_uri' => $this->endpoint]);
-		$this->jwt = Configuration::forSymmetricSigner(new Sha256, InMemory::base64Encoded($this->appSecret));
+		$this->publicKey = $publicKey;
 	}
 	
 	/**
@@ -99,15 +106,15 @@ class SSO
 		
 		$query = [
 			'response_type' => 'code',
-			'client' => $this->appId,
+			'client_id' => $this->appId,
 			'audience' => (string)$audience,
 			'state' => $state,
-			'redirect' => $returnto,
+			'redirect_uri' => $returnto,
 			'code_challenge' => hash('sha256', $verifier_challenge),
 			'code_challenge_method' => 'S256'
 		];
 		
-		$request = URLReflection::fromURL(sprintf('%s/auth/oauth', $this->endpoint));
+		$request = URLReflection::fromURL(sprintf('%s/auth/oauth2', $this->endpoint));
 		$request->setQueryString($query);
 		
 		return strval($request);
@@ -139,7 +146,7 @@ class SSO
 			['name' => 'verifier', 'contents' => $verifier]
 		];
 		
-		$response = $this->request('/token/create.json', $post);
+		$response = $this->request('/token/access.json', $post);
 		
 		/**
 		 * These assertions are only executed in a development environment, allowing servers running
@@ -150,14 +157,26 @@ class SSO
 		assert($response->tokens->access && $response->tokens->access->token);
 		assert($response->tokens->refresh && $response->tokens->refresh->token);
 		
+		$parser = new Parser(new JoseEncoder);
+		$validator = new Validator();
+		
 		$access = $response->tokens->access;
-		$parsed = $this->jwt->parser()->parse($access->token);
+		$parsed = $parser->parse($access->token);
+		
+		if ($this->publicKey !== null) {
+			assert(!empty($this->publicKey));
+			$validator->validate($parsed, new SignedWith(new RsaSha256, InMemory::plainText($this->publicKey)));
+		}
+		else {
+			assert(!empty($this->appSecret));
+			$validator->validate($parsed, new SignedWith(new Sha256, InMemory::plainText($this->appSecret)));
+		}
 		
 		assert($parsed instanceof UnencryptedToken);
 		
 		return [
-			'access'  => new Token($this, $parsed, $access->expires),
-			'refresh' => new RefreshToken($this, $response->tokens->refresh->token, $response->tokens->refresh->expires)
+			'access'  => new Token($parsed, $access->expires),
+			'refresh' => new RefreshToken($response->tokens->refresh->token, $response->tokens->refresh->expires)
 		];
 	}
 	
@@ -169,11 +188,11 @@ class SSO
 	 * from the API, you can extract the code by calling getToken.
 	 * 
 	 * @param string $token
-	 * @return array{'access': Token, 'refresh': RefreshToken}
+	 * @return array{0: Token, 1: RefreshToken}
 	 */
 	public function refresh(string $token) : array
 	{
-		return $this->renew(new RefreshToken($this, $token, null));
+		return $this->renew(new RefreshToken($token, null));
 	}
 	
 	/**
@@ -193,7 +212,7 @@ class SSO
 			['name' => 'secret', 'contents' => $this->appSecret],
 		];
 		
-		$response = $this->request('/token/create.json', $post);
+		$response = $this->request('/token/access.json', $post);
 		
 		/**
 		 * These assertions are only executed in a development environment, allowing servers running
@@ -203,7 +222,7 @@ class SSO
 		assert(is_object($response) && isset($response->tokens));
 		assert($response->tokens->access && $response->tokens->access->token);
 		
-		return new Token($this, $response->tokens->access->token, $response->tokens->access->expires);
+		return new Token($response->tokens->access->token, $response->tokens->access->expires);
 	}
 	
 	/**
@@ -316,18 +335,18 @@ class SSO
 	 * The renew method 
 	 * 
 	 * @param RefreshToken $token
-	 * @return array{'access': Token, 'refresh': RefreshToken}
+	 * @return array{0: Token, 1: RefreshToken}
 	 */
 	public function renew(RefreshToken $token) : array
 	{	
 		$post = [
-			['name' => 'type', 'contents' => 'code'],
-			['name' => 'token', 'contents' => $token->getId()],
+			['name' => 'grant_type', 'contents' => 'refresh_token'],
+			['name' => 'refresh_token', 'contents' => $token->getId()],
 			['name' => 'client', 'contents' => (string)$this->getAppId()],
 			['name' => 'secret', 'contents' => $this->getSecret()]
 		];
 		
-		$response = $this->request('/token/create.json', $post);
+		$response = $this->request('/token/access.json', $post);
 		
 		/**
 		 * These assertions are only executed in a development environment, allowing servers running
@@ -338,14 +357,19 @@ class SSO
 		assert($response->tokens->access && $response->tokens->access->token);
 		assert($response->tokens->refresh && $response->tokens->refresh->token);
 		
+		$parser = new Parser(new JoseEncoder);
+		$validator = new Validator();
+		
 		$access = $response->tokens->access;
-		$parsed = $this->jwt->parser()->parse($access->token);
+		$parsed = $parser->parse($access->token);
+		
+		$validator->validate($parsed, new SignedWith(new RsaSha256, InMemory::plainText($this->publicKey)));
 		
 		assert($parsed instanceof UnencryptedToken);
 		
 		return [
-			'access'  => new Token($this, $parsed, $access->expires),
-			'refresh' => new RefreshToken($this, $response->tokens->refresh->token, $response->tokens->refresh->expires)
+			new Token($parsed, $access->expires),
+			new RefreshToken($response->tokens->refresh->token, $response->tokens->refresh->expires)
 		];
 	}
 	
@@ -400,5 +424,62 @@ class SSO
 		}
 		
 		return $responsePayload;
+	}
+	
+	public function getBaseURL() : string
+	{
+		return $this->endpoint;
+	}
+	
+	/**
+	 * 
+	 * @param string|int $username
+	 * @return User
+	 */
+	public function getUser(string|int $username) : User
+	{
+		
+		if (!$username) {
+			throw new Exception('Valid user id needed'); 
+		}
+		
+		/**
+		 * 
+		 * @var object
+		 */
+		$request = $this->request(
+			$this->endpoint . '/user/detail/' . $username . '.json',
+			[],
+			['signature' => (string)$this->makeSignature()]
+		);
+		
+		/*
+		 * Fetch the JSON message from the endpoint. This should tell us whether 
+		 * the request was a success.
+		 */
+		$data = $request->payload;
+		
+		return new User(
+			$data->id,
+			$data->username,
+			$data->aliases,
+			$data->groups,
+			$data->verified,
+			$data->registered_unix,
+			$data->attributes,
+			$data->avatar
+		);
+	}
+	
+	/**
+	 * 
+	 * @param int $target
+	 * @param string[] $contexts
+	 * @deprecated
+	 */
+	public function makeSignature($target = null, $contexts = []) : Signature
+	{
+		$signature = new Signature(Hash::ALGO_DEFAULT, $this->appId, $this->appSecret, $target, $contexts);
+		return $signature;
 	}
 }

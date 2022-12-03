@@ -8,12 +8,6 @@ class RefreshToken
 	
 	/**
 	 * 
-	 * @var SSO
-	 */
-	private $sso;
-	
-	/**
-	 * 
 	 * @var string
 	 */
 	private $token;
@@ -26,13 +20,11 @@ class RefreshToken
 	
 	/**
 	 * 
-	 * @param SSO $sso
 	 * @param string $token
 	 * @param int|null $expires
 	 */
-	public function __construct(SSO $sso, string $token, int $expires = null) 
+	public function __construct(string $token, int $expires = null) 
 	{
-		$this->sso = $sso;
 		$this->token = $token;
 		$this->expires = $expires;
 	}
@@ -41,7 +33,7 @@ class RefreshToken
 	 * 
 	 * @return string
 	 */
-	public function getId()
+	public function getId() : string
 	{
 		return $this->token;
 	}

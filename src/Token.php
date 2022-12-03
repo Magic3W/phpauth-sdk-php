@@ -8,12 +8,6 @@ class Token
 	
 	/**
 	 * 
-	 * @var SSO
-	 */
-	private $sso;
-	
-	/**
-	 * 
 	 * @var UnencryptedToken
 	 */
 	private $token;
@@ -24,9 +18,8 @@ class Token
 	 */
 	private $expires;
 	
-	public function __construct(SSO $sso, UnencryptedToken $token, int $expires)
+	public function __construct(UnencryptedToken $token, int $expires)
 	{
-		$this->sso = $sso;
 		$this->token = $token;
 		$this->expires = $expires;
 	}
@@ -42,6 +35,16 @@ class Token
 	}
 	
 	/**
+	 * Returns the token's user ID
+	 * 
+	 * @return string
+	 */
+	public function getUserId() : string
+	{
+		return $this->token->claims()->get('uid');
+	}
+	
+	/**
 	 * Indicates whether the session was expired, or whether the session is still active.
 	 * 
 	 * @return bool
@@ -49,6 +52,16 @@ class Token
 	public function isExpired() : bool
 	{
 		return time() > $this->expires;
+	}
+	
+	/**
+	 * Indicates whether the user account is restricted.
+	 * 
+	 * @return bool
+	 */
+	public function isRestricted() : bool
+	{
+		return $this->token->claims()->get('restricted');
 	}
 	
 	/**

@@ -1,6 +1,7 @@
 <?php namespace magic3w\phpauth\sdk;
 
 use Exception;
+use auth\File;
 
 class User
 {
@@ -50,6 +51,7 @@ class User
 	 * @var object
 	 */
 	private $avatar;
+	private $attributes;
 	
 	/**
 	 * 
@@ -59,6 +61,7 @@ class User
 	 * @param string[] $groups
 	 * @param bool $verified
 	 * @param int $registered
+	 * @param object $attributes
 	 * @param object $avatar
 	 */
 	public function __construct(
@@ -68,6 +71,7 @@ class User
 		array $groups, 
 		bool $verified, 
 		int $registered, 
+		object $attributes,
 		object $avatar
 	) {
 		$this->id = $id;
@@ -76,6 +80,7 @@ class User
 		$this->groups = $groups;
 		$this->verified = $verified;
 		$this->registered = $registered;
+		$this->attributes = $attributes;
 		$this->avatar = $avatar;
 	}
 	
@@ -119,5 +124,27 @@ class User
 	public function getGroups() : array
 	{
 		return $this->groups;
+	}
+	
+	public function getAttribute($name)
+	{
+		if (!isset($this->attributes->{$name})) {
+			throw new Exception("Attribute {$name} is not readable"); 
+		}
+		if (!isset($this->attributes->{$name}->value)) {
+			throw new Exception("Attribute {$name} is not set"); 
+		}
+		if (!is_object($this->attributes->{$name}->value)) {
+			return $this->attributes->{$name}; 
+		}
+		
+		$data = $this->attributes->{$name}->value;
+		
+		switch ($data->type) {
+			case 'file':
+				return new File($data->preview, $data->download);
+			default:
+				throw new Exception('Invalid data type');
+		}
 	}
 }
